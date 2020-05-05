@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.6.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>kss.springframework</groupId>
+    <artifactId>simple-web-service</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>simple-web-service</name>
+    <description>Demo project for Spring Boot</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.version>11</java.version>
+
+        <docker.image.prefix>docker869</docker.image.prefix>
+        <docker.image.name>simple-web-service</docker.image.name>
+
+        <docker.startParallel>true</docker.startParallel>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.8.5</version>
+        </dependency>
+
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+
+            <plugin>
+                <groupId>io.fabric8</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>0.20.0</version>
+
+                <configuration>
+
+                    <!--<dockerHost>http://127.0.0.1:2375</dockerHost>-->
+                    <dockerHost>tcp://192.168.99.100:2376</dockerHost>
+
+                    <verbose>true</verbose>
+                    <images>
+                        <image>
+                            <name>${docker.image.prefix}/${docker.image.name}</name>
+                            <build>
+                                <dockerFileDir>${project.basedir}/target/dockerfile/</dockerFileDir>
+
+                                <!--copies artficact to docker build dir in target-->
+                                <assembly>
+                                    <descriptorRef>artifact</descriptorRef>
+                                </assembly>
+                                <tags>
+                                    <tag>latest</tag>
+                                    <tag>${project.version}</tag>
+                                </tags>
+                            </build>
+
+                            <run>
+                                <ports>
+                                    <port>8585:8585</port>
+                                </ports>
+                                <links>
+                                    <link>rabbitmq:rabbitmq</link>
+                                </links>
+                                <env>
+                                    <SPRING_RABBITMQ_HOST>rabbitmq</SPRING_RABBITMQ_HOST>
+                                </env>
+                                <dependsOn>
+                                    <container>rabbitmq</container>
+                                    <container>mysql</container>
+                                    <container>web-service-listener</container>
+                                </dependsOn>
+                            </run>
+
+                        </image>
+
+                        <image>
+                            <name>mysql</name>
+                            <alias>mysql</alias>
+                            <run>
+                                <!--expose port for dn-->
+                                <ports>
+                                    <port>3308:3306</port>
+                                </ports>
+                                <!--set env prams for mysql image-->
+                                <env>
+                                    <MYSQL_DATABASE>testdb</MYSQL_DATABASE>
+                                    <MYSQL_ALLOW_EMPTY_PASSWORD>yes</MYSQL_ALLOW_EMPTY_PASSWORD>
+                                </env>
+                                <!--wait for db to start-->
+                                <wait>
+                                    <time>20000</time>
+                                </wait>
+                            </run>
+                        </image>
+
+
+                        <!--rabbit container-->
+                        <image>
+                            <name>rabbitmq</name>
+                            <alias>rabbitmq</alias>
+                            <run>
+                                <ports>
+                                    <port>5672:5672</port>
+                                    <port>15672:15672</port>
+<!--                                    <port>5672:32802</port>-->
+<!--                                    <port>4369:32803</port>-->
+<!--                                    <port>25672:32804</port>-->
+                                </ports>
+                                <!--wait for db to start-->
+                                <wait>
+                                    <time>20000</time>
+                                </wait>
+                            </run>
+                        </image>
+
+                        <image>
+                            <name>docker869/web-service-listener</name>
+                            <alias>web-service-listener</alias>
+                            <run>
+                                <ports>
+                                    <port>8484:8484</port>
+                                </ports>
+                                <links>
+                                    <link>rabbitmq:rabbitmq</link>
+                                    <link>mysql:mysql</link>
+                                </links>
+                                <env>
+                                    <SPRING_DATASOURCE_URL>jdbc:mysql://mysql:3308/testdb</SPRING_DATASOURCE_URL>
+                                    <SPRING_PROFILES_ACTIVE>mysql</SPRING_PROFILES_ACTIVE>
+                                    <SPRING_RABBITMQ_HOST>rabbitmq</SPRING_RABBITMQ_HOST>
+                                </env>
+                                <dependsOn>
+                                    <container>rabbitmq</container>
+                                    <container>mysql</container>
+                                </dependsOn>
+                                <wait>
+                                    <time>30000</time>
+                                </wait>
+                            </run>
+                        </image>
+
+
+                    </images>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>start</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <!-- "build" should be used to create the images with the
+                                 artifact -->
+                            <goal>build</goal>
+                            <goal>start</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>stop</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>stop</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--groovy compiler plugin-->
+            <plugin>
+                <groupId>org.codehaus.gmavenplus</groupId>
+                <artifactId>gmavenplus-plugin</artifactId>
+                <version>1.5</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <scripts>
+                        <script>file:///${project.basedir}/src/main/scripts/BuildDockerfile.groovy</script>
+                    </scripts>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.codehaus.groovy</groupId>
+                        <artifactId>groovy-all</artifactId>
+                        <!-- any version of Groovy \>= 1.5.0 should work here -->
+                        <version>2.4.8</version>
+                        <scope>runtime</scope>
+                    </dependency>
+                </dependencies>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.22.2</version>
+                <executions>
+                    <execution>
+                        <id>integration-test</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+
+
+
+
+    </build>
+
+    <repositories>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+
+
+</project>

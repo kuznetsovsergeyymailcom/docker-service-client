@@ -1,0 +1,11 @@
+docker run --name mysqldb -p 3306:3306 -e MYSQL_DATABASE=testdb -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -d mysql
+
+docker run --name pageviewservice -p 8081:8081 \
+--link rabbitmq:rabbitmq \
+--link mysqldb:mysqldb \
+-e SPRING_DATASOURCE_URL=jdbc:mysql://mysqldb:3306/testdb \
+-e SPRING_PROFILES_ACTIVE=mysql \
+-e SPRING_RABBITMQ_HOST=rabbitmq \
+docker869/pageviewservice
+
+mvn clean package docker:build verify docker:push
